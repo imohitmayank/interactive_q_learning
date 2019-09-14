@@ -2,34 +2,34 @@
 // MohitMayank.com
 //////////////////
 
+// gridworld settings
 var cols, rows;
 var w = 120;
 var grid = [];
 
-var current;
+// var current;
 
+// helper variable 
 var tableWidth, tableHeight;
 var max_reward = 0, min_reward = 0;
 var color_gradient;
-
 var compute = false;
+var show_policy = false;
 
 // widgets
 var reward_input;
-var sel;
+var state_type_sel;
 var discount_input;
 var randomness_input;
 var e_greedy_input;
 var show_hide_policy;
-
-var show_policy = false;
 
 // Q-learning 
 var discount = 0.9;
 var learning_rate = 1;
 var episodes = 10;
 var turns_limit = 100;
-var nondeterministic_prob = 1;
+var deterministic_prob = 1;
 var e_greedy = 1;
 
 // SETUP
@@ -101,11 +101,11 @@ function create_setting_menu_widgets(){
   reward_input.size(50);
  
   // Selecting the type of state
-  sel = createSelect();
-  sel.position(290, tableHeight + 120);
-  sel.option('normal');
-  sel.option('terminal');
-  sel.option('wall');
+  state_type_sel = createSelect();
+  state_type_sel.position(290, tableHeight + 120);
+  state_type_sel.option('normal');
+  state_type_sel.option('terminal');
+  state_type_sel.option('wall');
   // sel.changed(state_type_changed);
   
   // button to apply to all
@@ -330,7 +330,7 @@ function toggle_compute(){
 function apply_to_all_clicked(){
   for (var i = 0; i < grid.length; i++) {
     grid[i].value = reward_input.value();
-    grid[i].type = sel.value();
+    grid[i].type = state_type_sel.value();
   }
 
   reset_max_min_reward();
@@ -364,7 +364,7 @@ function mouseClicked()
     var current_index = get_index(colNo, rowNo);
 
     grid[current_index].reward = reward_input.value();
-    grid[current_index].type = sel.value();
+    grid[current_index].type = state_type_sel.value();
     grid[current_index].value = 0;
 
     // if (reward_input.value() > max_reward) max_reward = reward_input.value();
@@ -382,17 +382,14 @@ function mouseClicked()
         if (neighbours[i][0] == 'left') grid[current_index].action_rewards['left'] = float(reward_input.value());
         if (neighbours[i][0] == 'right') grid[current_index].action_rewards['right'] = float(reward_input.value());
       }
-      else if (sel.value() != 'wall') {
+      else if (state_type_sel.value() != 'wall') {
         if (neighbours[i][0] == 'top') grid[index].action_rewards['bottom'] = float(reward_input.value());
         if (neighbours[i][0] == 'bottom') grid[index].action_rewards['top'] = float(reward_input.value());
         if (neighbours[i][0] == 'left') grid[index].action_rewards['right'] = float(reward_input.value());
         if (neighbours[i][0] == 'right') grid[index].action_rewards['left'] = float(reward_input.value());
       }
-      
     }
-
   }
-
 }
 
 function find_max(obj){
@@ -563,7 +560,7 @@ function Cell(i, j) {
     // get list of all po
     var possible_actions = ['top', 'bottom', 'right', 'left'];
     var state_future_rewards = [];
-    var other_states_prob = (1 - nondeterministic_prob) / 3;
+    var other_states_prob = (1 - deterministic_prob) / 3;
 
     //find the max future reward for each action and possible states
     for (x = 0; x < possible_actions.length; x++){
@@ -574,7 +571,7 @@ function Cell(i, j) {
             summed_action_state_reward += other_states_prob * grid[this.get_next_state_pos(possible_actions[y], 1)].value;
           }
           else{
-            summed_action_state_reward += nondeterministic_prob * grid[this.get_next_state_pos(possible_actions[y], 1)].value;
+            summed_action_state_reward += deterministic_prob * grid[this.get_next_state_pos(possible_actions[y], 1)].value;
           }
       }
       // apply discount
@@ -591,9 +588,9 @@ function Cell(i, j) {
   }
 
   // Get the index of next state, given current state and applied action
-  this.get_next_state_pos = function(action, nondeterministic_prob = 'null'){
+  this.get_next_state_pos = function(action, deterministic_prob = 'null'){
     
-    if (nondeterministic_prob == 'null') nondeterministic_prob = nondeterministic_prob;
+    if (deterministic_prob == 'null') deterministic_prob = deterministic_prob;
     var next_state_pos = -1;
     var action_pos_mapping = {'top': get_index(i, j -1), 'right': get_index(i+1, j), 'bottom' : get_index(i, j+1), 'left': get_index(i-1, j)};
     var action_pos_mapping_without_applied_action = {};
@@ -604,7 +601,7 @@ function Cell(i, j) {
 
     // suggest next state w.r.t. nondeterministic probability
     var random_number = Math.random();
-    if (random_number <= nondeterministic_prob) next_state_pos = action_pos_mapping[action];
+    if (random_number <= deterministic_prob) next_state_pos = action_pos_mapping[action];
     else next_state_pos = sample_random(Object.values(action_pos_mapping_without_applied_action))
 
     // if next state is not possible (out of grid or wall), return current state
@@ -707,8 +704,5 @@ function Cell(i, j) {
       if (direction != 'na') this.arrow.update(angle);
       else this.arrow.update(angle, 0)
     }  
-
   }
-
-
 }
