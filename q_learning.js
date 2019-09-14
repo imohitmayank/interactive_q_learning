@@ -26,8 +26,8 @@ var discount = 0.9;
 var learning_rate = 1;
 var episodes = 10;
 var turns_limit = 100;
-var nondeterministic_prob = 0.9;
-var e_greedy = 0.5;
+var nondeterministic_prob = 1;
+var e_greedy = 1;
 
 // SETUP
 ////////////////////
@@ -164,8 +164,10 @@ function draw() {
 
     for (var i = 0; i < grid.length; i++) 
     {
-      var color_map = map(grid[i].value, min_reward, max_reward, 0, 1)
-      grid[i].color =  lerpColor(color_to, color_from, color_map)
+      if (min_reward != max_reward){
+        var color_map = map(grid[i].value, min_reward, max_reward, 0, 1)
+        grid[i].color =  lerpColor(color_to, color_from, color_map)
+      }
       grid[i].show();
     }
   }
@@ -259,9 +261,9 @@ function mouseClicked()
         if (neighbours[i][0] == 'top') grid[current_index].action_rewards['top'] = float(reward_input.value());
         if (neighbours[i][0] == 'bottom') grid[current_index].action_rewards['bottom'] = float(reward_input.value());
         if (neighbours[i][0] == 'left') grid[current_index].action_rewards['left'] = float(reward_input.value());
-        if (neighbours[i][0] == 'right') grid[current_index].action_rewards['roght'] = float(reward_input.value());
+        if (neighbours[i][0] == 'right') grid[current_index].action_rewards['right'] = float(reward_input.value());
       }
-      else{
+      else if (sel.value() != 'wall') {
         if (neighbours[i][0] == 'top') grid[index].action_rewards['bottom'] = float(reward_input.value());
         if (neighbours[i][0] == 'bottom') grid[index].action_rewards['top'] = float(reward_input.value());
         if (neighbours[i][0] == 'left') grid[index].action_rewards['right'] = float(reward_input.value());
@@ -332,55 +334,32 @@ function perfrom_q_learning(){
 
     // get all possible neighbors
     var valid_neighbors = grid[current_pos].get_neighbors_action_index();
+    var possible_actions = ['top', 'right', 'botton', 'left'];
 
-    // select one action randomly
-    var action = sample_random(valid_neighbors);
+    // select one action by e-greedy
+    // var action = sample_random(valid_neighbors);
+    var best_action_value_pair = grid[current_pos].get_next_best_action_value();
+    var best_action_index = possible_actions.indexOf(best_action_value_pair[0]);
+    var spliced_actions = possible_actions;
+    spliced_actions.splice(best_action_index, 1);
+
+    var selected_action;
+    if (Math.random() <= (1 - e_greedy)) selected_action = best_action_value_pair[0];
+    else selected_action = sample_random(spliced_actions);
 
     // find the next state
-    var next_state_index = action;
+    var next_state_pos = grid[current_pos].get_next_state_pos(selected_action);
 
-    // if no action present, go to random state
-    if (typeof(action) == "undefined") {
-      next_state_index = ["", get_random_state()];
+    // if no action present, go to random state and skip learning for this state
+    if (valid_neighbors.length == 0) {
+      next_state_pos = get_random_state();
     }
-    // else perform the learning
-    else{
 
-      // get expected values for all actions
-      var expected_values_all_neighbor_states = [];
-      for (i = 0; i < valid_neighbors.length; i++){
-        expected_values_all_neighbor_states.push(grid[valid_neighbors[i][1]].value)
-      }
-      var other_state_probability = nondeterministic_prob / (valid_neighbors - 1);
-      // to store the maximum future score possible
-      var max_future_score = 0;
-      // for each possible next actions, find the one with most reward
-      for (i = 0; i < valid_neighbors.length; i++){
-        // pick one action
-        var action_and_neighbour = valid_neighbors[i];
-        // get expected value of the next state
-        var possible_next_state_action_value = grid[action_and_neighbour[1]].value;
-        // get the reward of performing the action 
-        var action_reward = grid[current_pos].action_rewards[action_and_neighbour[0]];
-
-        // calculate the score
-        var score_for_action =  action_reward + (discount * possible_next_state_action_value);
-        // if score is moe than previous calculated, 
-        if (score_for_action > max_future_score){
-          // update
-          max_future_score = score_for_action;
-        }
-      }
-
-      // modify the current state's expected value
-      grid[current_pos].value = round_float(max_future_score, 2);
+    // modify the current state's expected value
+    grid[current_pos].value = round_float(best_action_value_pair[1], 2);
           
-      // update the value
-      // grid[current_pos].update_value();
-    }
-
     // goto next state
-    current_pos = next_state_index[1];
+    current_pos = next_state_pos;
   }
 }
 
@@ -459,46 +438,50 @@ function Cell(i, j) {
 
     return neighbors;
   }
-  
+
   // Get the position of next best action
-  this.get_next_best_action_state_value = function(){
+  this.get_next_best_action_value = function(){
     // get list of all po
     var possible_actions = ['top', 'bottom', 'right', 'left'];
     var state_future_rewards = [];
-    var other_states_prob = nondeterministic_prob / 3;
+    var other_states_prob = (1 - nondeterministic_prob) / 3;
 
-    for (i = 0; i < possible_states.length; i++){
-      
-      var action_reward = this.action_rewards[possible_actions[i]];
+    //find the max future reward for each action and possible states
+    for (x = 0; x < possible_actions.length; x++){
+      var action_reward = this.action_rewards[possible_actions[x]];
       var summed_action_state_reward = 0;
-
-      for (j = 0; j < possible_states.length; j++){
-
-          if (i != j){
-            summed_action_state_reward += other_states_prob * grid[this.get_next_state_pos(possible_actions[j], 1)].value;
+      for (y = 0; y < possible_actions.length; y++){
+          if (x != y){
+            summed_action_state_reward += other_states_prob * grid[this.get_next_state_pos(possible_actions[y], 1)].value;
           }
           else{
-            summed_action_state_reward += nondeterministic_prob * grid[this.get_next_state_pos(possible_actions[j], 1)].value;
+            summed_action_state_reward += nondeterministic_prob * grid[this.get_next_state_pos(possible_actions[y], 1)].value;
           }
       }
       // apply discount
-      summed_action_state_reward = discount * summed_action_state_reward
+      summed_action_state_reward = action_reward + discount * summed_action_state_reward
 
       // add to list
       state_future_rewards.push(summed_action_state_reward);
     }
 
     // now find the max possible reward
-    find
+    var max_index = find_index_of_max_value(state_future_rewards);
+    // return 1. action with max future reward, and 2. the value of future reward
+    return [possible_actions[max_index], state_future_rewards[max_index]]
   }
 
   // Get the index of next state, given current state and applied action
-  this.get_next_state_pos = function(action, nondeterministic_prob = nondeterministic_prob){
+  this.get_next_state_pos = function(action, nondeterministic_prob = 'null'){
     
+    if (nondeterministic_prob == 'null') nondeterministic_prob = nondeterministic_prob;
     var next_state_pos = -1;
     var action_pos_mapping = {'top': get_index(i, j -1), 'right': get_index(i+1, j), 'bottom' : get_index(i, j+1), 'left': get_index(i-1, j)};
-    var action_pos_mapping_without_applied_action = action_pos_mapping;
-    delete action_pos_mapping_without_applied_action[action];
+    var action_pos_mapping_without_applied_action = {};
+    for (ii = 0; ii < Object.keys(action_pos_mapping).length; ii++){
+      var action_at_index = Object.keys(action_pos_mapping)[ii];
+      if (action_at_index != action) action_pos_mapping_without_applied_action[action_at_index] = action_pos_mapping[action_at_index];
+    }
 
     // suggest next state w.r.t. nondeterministic probability
     var random_number = Math.random();
@@ -506,8 +489,9 @@ function Cell(i, j) {
     else next_state_pos = sample_random(Object.values(action_pos_mapping_without_applied_action))
 
     // if next state is not possible (out of grid or wall), return current state
-    if (next_state_pos == -1 || grid[next_state_pos].type == 'wall') next_state_pos = get_index(i, j);
-
+    if (next_state_pos == -1)  next_state_pos = get_index(i, j);  
+    if (grid[next_state_pos].type == 'wall') next_state_pos = get_index(i, j);  
+        
     // return
     return next_state_pos;
   }
@@ -571,7 +555,7 @@ function Cell(i, j) {
       noStroke();
       fill(151, 151, 151);
       rect(x, y, w, w);
-      // this.value = '';
+      this.value = 0;
     }
     else{
       // now color the environment
@@ -585,7 +569,7 @@ function Cell(i, j) {
     if (show_policy == true && this.type != 'terminal' && this.type != 'wall'){
       
       // get the best neighbor and point to that
-      var neighbors = this.get_neighbors_action_index();
+      var neighbors = this.get_all_neighbors_action_index();
       var max_score = -Infinity;
       var direction = 'na';
       for (ii = 0; ii < neighbors.length; ii ++){
