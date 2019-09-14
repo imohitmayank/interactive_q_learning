@@ -3,7 +3,7 @@
 //////////////////
 
 var cols, rows;
-var w = 100;
+var w = 120;
 var grid = [];
 
 var current;
@@ -17,6 +17,9 @@ var compute = false;
 // widgets
 var reward_input;
 var sel;
+var discount_input;
+var randomness_input;
+var e_greedy_input;
 var show_hide_policy;
 
 var show_policy = false;
@@ -70,24 +73,36 @@ function create_setting_menu_widgets(){
   noStroke();
   fill(0);
   
-  // Main heading
-  text("Environment builder", 10, tableHeight + 20);
-  line(150, tableHeight + 20, 600, tableHeight + 20)
+  // Gridworld dimensions
+  ////////////////////////
+  // selection to modify grid size
+  grid_size_sel = createSelect();
+  grid_size_sel.position(90, tableHeight + 70);
+  grid_size_sel.option('small');
+  grid_size_sel.option('medium');
+  grid_size_sel.option('large');
+  grid_size_sel.changed(grid_size_changed);
 
-  // subsection heading
-  text("Modify state,", 10, tableHeight + 50);
-  
-  
+  // selection to modify grid size
+  grid_speed_sel = createSelect();
+  grid_speed_sel.position(80, tableHeight + 120);
+  grid_speed_sel.option('slow');
+  grid_speed_sel.option('medium');
+  grid_speed_sel.option('fast');
+  grid_speed_sel.changed(grid_speed_changed);
+
+  ////////////////////////
+
+  // States level
+  ////////////////////////
   // Modify the states in enviroment, 
   reward_input = createInput('0');
-  reward_input.position(120, tableHeight + 70);
+  reward_input.position(300, tableHeight + 70);
   reward_input.size(50);
-  text("Reward value: ", 20, tableHeight + 85);
  
   // Selecting the type of state
   sel = createSelect();
-  text("State type: ", 20, tableHeight + 135);
-  sel.position(120, tableHeight + 120);
+  sel.position(290, tableHeight + 120);
   sel.option('normal');
   sel.option('terminal');
   sel.option('wall');
@@ -95,23 +110,45 @@ function create_setting_menu_widgets(){
   
   // button to apply to all
   apply_to_all_button = createButton('Apply to all');
-  apply_to_all_button.position(20, tableHeight + 160);
+  apply_to_all_button.position(230, tableHeight + 160);
   apply_to_all_button.mousePressed(apply_to_all_clicked);
+  //////////////////////
 
+  // Agent level
+  ////////////////////////
+  // Change discount, 
+  discount_input = createInput('0.9');
+  discount_input.position(500, tableHeight + 70);
+  discount_input.size(50);
+ 
+  // Change randomness
+  randomness_input = createInput('1');
+  randomness_input.position(510, tableHeight + 120);
+  randomness_input.size(50);
+  
+  // Change greedyness
+  e_greedy_input = createInput('1');
+  e_greedy_input.position(500, tableHeight + 165);
+  e_greedy_input.size(50);
+  //////////////////////
+
+  // Execution level
+  ////////////////////////
   // button to run the simulation
   run = createButton('Run/Stop');
-  run.position(20, tableHeight + 200);
+  run.position(20, tableHeight + 220);
   run.mousePressed(toggle_compute);
 
   // button to reset
   reset = createButton('Reset');
-  reset.position(150, tableHeight + 200);
+  reset.position(150, tableHeight + 220);
   reset.mousePressed(reset_environment);
 
   // button to show policy
   show_hide_policy = createButton('Show/Hide Policy');
-  show_hide_policy.position(250, tableHeight + 200);
+  show_hide_policy.position(250, tableHeight + 220);
   show_hide_policy.mousePressed(show_hide_policy_toggle);
+  ////////////////////////
 
 }
 
@@ -125,16 +162,54 @@ function create_setting_menu_text(){
   text("Environment builder", 10, tableHeight + 20);
   stroke(0);
   line(150, tableHeight + 20, 600, tableHeight + 20)
+  line(80, tableHeight + 210, 600, tableHeight + 210)
+  stroke(0, 75);
+  line(195, tableHeight + 30, 195, tableHeight + 190)
+  line(400, tableHeight + 30, 400, tableHeight + 190)
   noStroke();
+
+  // Gridworld level
+  /////////////////
   // subsection heading
-  text("Modify state,", 10, tableHeight + 50);
-  
+  text("Gridworld level,", 10, tableHeight + 50);
+
+  // Grid size
+  text("Grid size:", 20, tableHeight + 85);
+
+  // 
+  text("Speed:", 20, tableHeight + 135);
+
+  // States level
+  ////////////////////////
+  // subsection heading
+  text("State level,", 200, tableHeight + 50);
   
   // Modify the states in enviroment, 
-  text("Reward value: ", 20, tableHeight + 85);
+  text("Reward value: ", 210, tableHeight + 85);
  
   // Selecting the type of state
-  text("State type: ", 20, tableHeight + 135);
+  text("State type: ", 210, tableHeight + 135);
+  /////////////////////////
+
+  // Agent level
+  ////////////////////////
+  // subsection heading
+  text("Agent level,", 410, tableHeight + 50);
+  
+  // Future reward discount
+  text("Discount: ", 420, tableHeight + 85);
+ 
+  // Deterministic probability
+  text("Randomness: ", 420, tableHeight + 135);
+
+  // E-greedy
+  text("E-greedy: ", 420, tableHeight + 185);
+  /////////////////////////
+
+  // Execution level
+  ////////////////////////
+  text("Execution", 10, tableHeight + 210);
+  ////////////////////////
 }
 
 // DRAW
@@ -187,6 +262,44 @@ function draw() {
 // Callback funtion
 //////////////////////
 
+// modify the gridworld cell size and reset environment
+function grid_size_changed(){
+  var grid_size_mapping = {'small': 120, 'medium': 85, 'large' : 50}
+  var new_value = grid_size_sel.value();
+  new_value = grid_size_mapping[new_value];
+
+  // if size is changed, reset with new cell width
+  if (new_value != w) {
+    w = new_value;
+    // reset_environment();
+
+    // as reset environment even resets the dropdown, PFB hack
+    cols = floor(tableWidth/w);
+    rows = floor(tableHeight/w);
+    grid = [];
+    max_reward = 0, min_reward = 0;
+
+    // refill the grid
+    for (var j = 0; j < rows; j++) {
+      for (var i = 0; i < cols; i++) {
+        var cell = new Cell(i, j);
+        grid.push(cell);
+      }
+    }
+  }
+}
+
+//
+function grid_speed_changed(){
+  var grid_speed_mapping = {'slow' : [1, 1], 'medium': [1, 100], 'fast' : [100, 100]}
+  var new_value = grid_speed_sel.value();
+  new_value = grid_speed_mapping[new_value];
+
+  // modify the parameters factoring speed
+  episodes = new_value[0];
+  turns_limit = new_value[1];
+}
+
 // show and hide policy arrows
 function show_hide_policy_toggle(){
   
@@ -205,7 +318,13 @@ function toggle_compute(){
   if (compute) compute = false;
   else compute = true;
 
+  // reset the max min reward for color
   reset_max_min_reward();
+
+  // reset the agent level settings
+  discount = float(discount_input.value());
+  randomness = float(randomness_input.value());
+  e_greedy = float(e_greedy_input.value());
 }
 
 function apply_to_all_clicked(){
@@ -511,6 +630,7 @@ function Cell(i, j) {
   this.show = function() 
   {
 
+    textAlign(CENTER, CENTER);
     fill(0, 0, 0);
     var x = this.i*w;
     var y = this.j*w;
@@ -539,16 +659,13 @@ function Cell(i, j) {
     noStroke();
     text(message, x + w/2, y + w/2);
     fill(0, 102, 153);
-    textAlign(CENTER, CENTER);
     
     // color as per the cell type
     if(this.type == 'terminal')
     {
       noStroke();
       text('t', x + w - w/10, y + w - w/10);
-      fill(0, 102, 153);
-      textAlign(CENTER, CENTER);
-      
+      fill(0, 102, 153);      
     }
     else if(this.type == 'wall')
     {
