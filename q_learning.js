@@ -278,6 +278,10 @@ function find_max(obj){
   return Math.max(...Object.values(obj))
 }
 
+function find_index_of_max_value(arr){
+  return arr.indexOf(Math.max(...arr));
+}
+
 function find_key_with_max(obj){
   return Object.keys(obj).reduce((a, b) => obj[a] > obj[b] ? a : b);
 }
@@ -457,12 +461,39 @@ function Cell(i, j) {
   }
   
   // Get the position of next best action
-  this.get_next_best_action = function(){
-    
+  this.get_next_best_action_state_value = function(){
+    // get list of all po
+    var possible_actions = ['top', 'bottom', 'right', 'left'];
+    var state_future_rewards = [];
+    var other_states_prob = nondeterministic_prob / 3;
+
+    for (i = 0; i < possible_states.length; i++){
+      
+      var action_reward = this.action_rewards[possible_actions[i]];
+      var summed_action_state_reward = 0;
+
+      for (j = 0; j < possible_states.length; j++){
+
+          if (i != j){
+            summed_action_state_reward += other_states_prob * grid[this.get_next_state_pos(possible_actions[j], 1)].value;
+          }
+          else{
+            summed_action_state_reward += nondeterministic_prob * grid[this.get_next_state_pos(possible_actions[j], 1)].value;
+          }
+      }
+      // apply discount
+      summed_action_state_reward = discount * summed_action_state_reward
+
+      // add to list
+      state_future_rewards.push(summed_action_state_reward);
+    }
+
+    // now find the max possible reward
+    find
   }
 
   // Get the index of next state, given current state and applied action
-  this.get_next_state_pos = function(action){
+  this.get_next_state_pos = function(action, nondeterministic_prob = nondeterministic_prob){
     
     var next_state_pos = -1;
     var action_pos_mapping = {'top': get_index(i, j -1), 'right': get_index(i+1, j), 'bottom' : get_index(i, j+1), 'left': get_index(i-1, j)};
@@ -474,8 +505,8 @@ function Cell(i, j) {
     if (random_number <= nondeterministic_prob) next_state_pos = action_pos_mapping[action];
     else next_state_pos = sample_random(Object.values(action_pos_mapping_without_applied_action))
 
-    // if next state is not possible, return current state
-    if (next_state_pos == -1) next_state_pos = get_index(i, j);
+    // if next state is not possible (out of grid or wall), return current state
+    if (next_state_pos == -1 || grid[next_state_pos].type == 'wall') next_state_pos = get_index(i, j);
 
     // return
     return next_state_pos;
