@@ -1,0 +1,582 @@
+//////////////////
+// MohitMayank.com
+//////////////////
+
+var cols, rows;
+var w = 100;
+var grid = [];
+
+var current;
+
+var tableWidth, tableHeight;
+var max_reward = 0, min_reward = 0;
+var color_gradient;
+
+var compute = false;
+
+// widgets
+var reward_input;
+var sel;
+var show_hide_policy;
+
+var show_policy = false;
+
+// Q-learning 
+var discount = 0.9;
+var learning_rate = 1;
+var episodes = 10;
+var turns_limit = 100;
+var nondeterministic_prob = 0.9;
+var e_greedy = 0.5;
+
+// SETUP
+////////////////////
+function setup() 
+{  
+  createCanvas(600, 600);
+  
+  tableWidth = width * 1;
+  tableHeight = height * 0.60;
+  cols = floor(tableWidth/w);
+  rows = floor(tableHeight/w);
+  
+  frameRate(5);
+
+  // set angle mode
+  angleMode(DEGREES);
+
+  // reset grid
+  grid = [];
+  max_reward = 0, min_reward = 0;
+
+  // refill the grid
+  for (var j = 0; j < rows; j++) {
+    for (var i = 0; i < cols; i++) {
+      var cell = new Cell(i, j);
+      grid.push(cell);
+    }
+  }
+
+  // populate settings text and widgets
+  create_setting_menu_widgets();
+  create_setting_menu_text();
+}
+
+// only the widgets
+function create_setting_menu_widgets(){
+  
+  // creating setting module
+  textAlign(LEFT, CENTER);
+  noStroke();
+  fill(0);
+  
+  // Main heading
+  text("Environment builder", 10, tableHeight + 20);
+  line(150, tableHeight + 20, 600, tableHeight + 20)
+
+  // subsection heading
+  text("Modify state,", 10, tableHeight + 50);
+  
+  
+  // Modify the states in enviroment, 
+  reward_input = createInput('0');
+  reward_input.position(120, tableHeight + 70);
+  reward_input.size(50);
+  text("Reward value: ", 20, tableHeight + 85);
+ 
+  // Selecting the type of state
+  sel = createSelect();
+  text("State type: ", 20, tableHeight + 135);
+  sel.position(120, tableHeight + 120);
+  sel.option('normal');
+  sel.option('terminal');
+  sel.option('wall');
+  // sel.changed(state_type_changed);
+  
+  // button to apply to all
+  apply_to_all_button = createButton('Apply to all');
+  apply_to_all_button.position(20, tableHeight + 160);
+  apply_to_all_button.mousePressed(apply_to_all_clicked);
+
+  // button to run the simulation
+  run = createButton('Run/Stop');
+  run.position(20, tableHeight + 200);
+  run.mousePressed(toggle_compute);
+
+  // button to reset
+  reset = createButton('Reset');
+  reset.position(150, tableHeight + 200);
+  reset.mousePressed(reset_environment);
+
+  // button to show policy
+  show_hide_policy = createButton('Show/Hide Policy');
+  show_hide_policy.position(250, tableHeight + 200);
+  show_hide_policy.mousePressed(show_hide_policy_toggle);
+
+}
+
+function create_setting_menu_text(){
+
+  // creating setting module
+  textAlign(LEFT, CENTER);
+  fill(0);
+  
+  // Main heading
+  text("Environment builder", 10, tableHeight + 20);
+  stroke(0);
+  line(150, tableHeight + 20, 600, tableHeight + 20)
+  noStroke();
+  // subsection heading
+  text("Modify state,", 10, tableHeight + 50);
+  
+  
+  // Modify the states in enviroment, 
+  text("Reward value: ", 20, tableHeight + 85);
+ 
+  // Selecting the type of state
+  text("State type: ", 20, tableHeight + 135);
+}
+
+// DRAW
+/////////////////////////////////
+function draw() {
+
+  background(255);
+  // clear();
+
+  create_setting_menu_text();
+
+  var episode_count = 0;
+  // recalculate the gradient
+  var color_from = color(0, 255, 0, 100);
+  var color_to = color(255, 0, 0, 100);
+
+  // if compute is true - calulate the value and perform gradient
+  if (compute)
+  {
+    // perform one episode of q_learning
+    if (episode_count < episodes){
+      perfrom_q_learning();
+      episode_count += 1;
+    }
+
+    reset_max_min_reward();
+
+    for (var i = 0; i < grid.length; i++) 
+    {
+      var color_map = map(grid[i].value, min_reward, max_reward, 0, 1)
+      grid[i].color =  lerpColor(color_to, color_from, color_map)
+      grid[i].show();
+    }
+  }
+  else
+  {
+      // draw the grids
+    for (var i = 0; i < grid.length; i++) 
+    {
+      grid[i].show();
+    }
+  }
+
+}
+/////////////////////////////////
+
+
+// Callback funtion
+//////////////////////
+
+// show and hide policy arrows
+function show_hide_policy_toggle(){
+  
+  // show policy
+  if (show_policy) show_policy = false;
+  else show_policy = true;
+}
+
+// reset the environment
+function reset_environment(){
+  setup();
+}
+
+// toggle the compute boolean
+function toggle_compute(){
+  if (compute) compute = false;
+  else compute = true;
+
+  reset_max_min_reward();
+}
+
+function apply_to_all_clicked(){
+  for (var i = 0; i < grid.length; i++) {
+    grid[i].value = reward_input.value();
+    grid[i].type = sel.value();
+  }
+
+  reset_max_min_reward();
+}
+
+function reset_max_min_reward(){
+  for (var i = 0; i < grid.length; i++) {
+    if (grid[i].value < min_reward) min_reward = grid[i].value;
+    if (grid[i].value > max_reward) max_reward = grid[i].value;
+  }
+
+}
+
+function get_index(i, j) {
+  if (i < 0 || j < 0 || i > cols-1 || j > rows-1) {
+    return -1;
+  }
+  return i + j * cols;
+}
+
+
+// handle mouseClicks
+function mouseClicked()
+{
+  if (mouseX < tableWidth && mouseY < tableHeight && mouseX != 0 && mouseY != 0)
+  {
+    // get the grid no
+    var rowNo = Math.floor(mouseY/w);
+    var colNo = Math.floor(mouseX/w);
+  
+    var current_index = get_index(colNo, rowNo);
+
+    grid[current_index].reward = reward_input.value();
+    grid[current_index].type = sel.value();
+    grid[current_index].value = 0;
+
+    // if (reward_input.value() > max_reward) max_reward = reward_input.value();
+    // if (reward_input.value() < min_reward) min_reward = reward_input.value();
+
+    // here if the reward is assigned to a state, 
+    // replicate the rewards on the actions which bring to this state
+    neighbours = grid[current_index].get_all_neighbors_action_index();
+    for (i = 0; i < neighbours.length; i ++)
+    {
+      var index = neighbours[i][1]; 
+      if (grid[index].type == 'wall'){
+        if (neighbours[i][0] == 'top') grid[current_index].action_rewards['top'] = float(reward_input.value());
+        if (neighbours[i][0] == 'bottom') grid[current_index].action_rewards['bottom'] = float(reward_input.value());
+        if (neighbours[i][0] == 'left') grid[current_index].action_rewards['left'] = float(reward_input.value());
+        if (neighbours[i][0] == 'right') grid[current_index].action_rewards['roght'] = float(reward_input.value());
+      }
+      else{
+        if (neighbours[i][0] == 'top') grid[index].action_rewards['bottom'] = float(reward_input.value());
+        if (neighbours[i][0] == 'bottom') grid[index].action_rewards['top'] = float(reward_input.value());
+        if (neighbours[i][0] == 'left') grid[index].action_rewards['right'] = float(reward_input.value());
+        if (neighbours[i][0] == 'right') grid[index].action_rewards['left'] = float(reward_input.value());
+      }
+      
+    }
+
+  }
+
+}
+
+function find_max(obj){
+  return Math.max(...Object.values(obj))
+}
+
+function find_key_with_max(obj){
+  return Object.keys(obj).reduce((a, b) => obj[a] > obj[b] ? a : b);
+}
+
+function round_float(no, decimals){
+  return Math.round(no * 10 ** decimals) / (10 ** decimals);
+}
+
+// Q-learning
+/////////////////
+
+// choose random element from array
+function sample_random(array){
+  return array[Math.floor(Math.random()*array.length)]
+}
+
+// returns random state except wall and terminals
+function get_random_state(){
+  // variable to hold available states
+  var available_states = [];
+  // find state which are of type normal
+  for (i = 0; i < grid.length; i++){
+    if (grid[i].type == 'normal') available_states.push(i);
+  }
+  // return one random
+  return sample_random(available_states);
+}
+
+// return true if game is over
+function is_episode_over(current_pos){
+  if (grid[current_pos].type == 'terminal') return true;
+  else return false;
+}
+
+// main Q-learning function
+function perfrom_q_learning(){
+
+  // get the starting place
+  current_pos = get_random_state();
+  // turn counter
+  turn_count = 0
+
+  // while epsiode doesn't terminates
+  while (!is_episode_over(current_pos) && (turn_count < turns_limit))
+  {
+    // increment
+    turn_count += 1;
+
+    // get all possible neighbors
+    var valid_neighbors = grid[current_pos].get_neighbors_action_index();
+
+    // select one action randomly
+    var action = sample_random(valid_neighbors);
+
+    // find the next state
+    var next_state_index = action;
+
+    // if no action present, go to random state
+    if (typeof(action) == "undefined") {
+      next_state_index = ["", get_random_state()];
+    }
+    // else perform the learning
+    else{
+
+      // get expected values for all actions
+      var expected_values_all_neighbor_states = [];
+      for (i = 0; i < valid_neighbors.length; i++){
+        expected_values_all_neighbor_states.push(grid[valid_neighbors[i][1]].value)
+      }
+      var other_state_probability = nondeterministic_prob / (valid_neighbors - 1);
+      // to store the maximum future score possible
+      var max_future_score = 0;
+      // for each possible next actions, find the one with most reward
+      for (i = 0; i < valid_neighbors.length; i++){
+        // pick one action
+        var action_and_neighbour = valid_neighbors[i];
+        // get expected value of the next state
+        var possible_next_state_action_value = grid[action_and_neighbour[1]].value;
+        // get the reward of performing the action 
+        var action_reward = grid[current_pos].action_rewards[action_and_neighbour[0]];
+
+        // calculate the score
+        var score_for_action =  action_reward + (discount * possible_next_state_action_value);
+        // if score is moe than previous calculated, 
+        if (score_for_action > max_future_score){
+          // update
+          max_future_score = score_for_action;
+        }
+      }
+
+      // modify the current state's expected value
+      grid[current_pos].value = round_float(max_future_score, 2);
+          
+      // update the value
+      // grid[current_pos].update_value();
+    }
+
+    // goto next state
+    current_pos = next_state_index[1];
+  }
+}
+
+
+// Cell definition
+/////////////////////////
+function Arrow(x,y,length){
+  this.x=x;
+  this.y=y;
+  this.length = length;
+  this.update = function(angle, length = this.length) {
+    // var angle = atan2(mouseY-y, mouseX-x);
+    push();
+    translate(this.x,this.y);
+    rotate(angle);
+
+    this.length = length;
+    
+    beginShape()
+    noStroke();
+    vertex(0,-this.length);
+    vertex(5*this.length, -this.length);
+    vertex(5*this.length, -3*this.length);
+    vertex(9*this.length, 0);
+    vertex(5*this.length, 3*this.length);
+    vertex(5*this.length, this.length);
+    vertex(0,this.length);
+    endShape(CLOSE);
+    pop();
+  }
+}
+
+function Cell(i, j) {
+  this.i = i;
+  this.j = j;
+  this.walls = [true, true, true, true];
+  this.action_rewards = {'top': 0, 'right': 0, 'left': 0, 'bottom': 0};
+  this.visited = false;
+  this.type = 'normal';
+  this.value = '0';
+  this.reward = 0;
+  this.color = color(255, 255, 255, 0);
+  this.arrow = new Arrow(i * w + w/2, j * w + w/2, 3);
+
+  // return the list of vailid neighbors
+  this.get_neighbors_action_index = function() {
+    
+    var neighbors = [];
+
+    var top    = get_index(i, j -1);
+    var right  = get_index(i+1, j);
+    var bottom = get_index(i, j+1);
+    var left   = get_index(i-1, j);
+    
+    if (top != -1 && grid[top].type != 'wall' ) neighbors.push(['top', top]);
+    if (right != -1 && grid[right].type  != 'wall' ) neighbors.push(['right', right]);
+    if (bottom != -1 && grid[bottom].type != 'wall' ) neighbors.push(['bottom', bottom]);
+    if (left != -1 && grid[left].type   != 'wall' ) neighbors.push(['left', left]);
+
+    return neighbors;
+  }
+  
+  this.get_all_neighbors_action_index = function() {
+    
+    var neighbors = [];
+
+    var top    = get_index(i, j -1);
+    var right  = get_index(i+1, j);
+    var bottom = get_index(i, j+1);
+    var left   = get_index(i-1, j);
+    
+    if (top != -1) neighbors.push(['top', top]);
+    if (right != -1) neighbors.push(['right', right]);
+    if (bottom != -1) neighbors.push(['bottom', bottom]);
+    if (left != -1) neighbors.push(['left', left]);
+
+    return neighbors;
+  }
+  
+  // Get the position of next best action
+  this.get_next_best_action = function(){
+    
+  }
+
+  // Get the index of next state, given current state and applied action
+  this.get_next_state_pos = function(action){
+    
+    var next_state_pos = -1;
+    var action_pos_mapping = {'top': get_index(i, j -1), 'right': get_index(i+1, j), 'bottom' : get_index(i, j+1), 'left': get_index(i-1, j)};
+    var action_pos_mapping_without_applied_action = action_pos_mapping;
+    delete action_pos_mapping_without_applied_action[action];
+
+    // suggest next state w.r.t. nondeterministic probability
+    var random_number = Math.random();
+    if (random_number <= nondeterministic_prob) next_state_pos = action_pos_mapping[action];
+    else next_state_pos = sample_random(Object.values(action_pos_mapping_without_applied_action))
+
+    // if next state is not possible, return current state
+    if (next_state_pos == -1) next_state_pos = get_index(i, j);
+
+    // return
+    return next_state_pos;
+  }
+
+  this.update_value = function(){
+      this.value = round_float(find_max(this.action_rewards), 2);
+  }
+
+  this.highlight = function() {
+    var x = this.i*w;
+    var y = this.j*w;
+    noStroke();
+    fill(0, 0, 255, 100);
+    rect(x, y, w, w);
+  }
+
+  this.show = function() 
+  {
+
+    fill(0, 0, 0);
+    var x = this.i*w;
+    var y = this.j*w;
+    
+    stroke(0);
+
+    if (this.walls[0]) {
+      line(x    , y    , x + w, y);
+    }
+    if (this.walls[1]) {
+      line(x + w, y    , x + w, y + w);
+    }
+    if (this.walls[2]) {
+      line(x + w, y + w, x    , y + w);
+    }
+    if (this.walls[3]) {
+      line(x    , y + w, x    , y);
+    }
+
+    // write out the value
+    // textSize(12);
+    message = this.value
+    if (this.reward != 0){
+      message += "\nR: " + this.reward
+    } 
+    noStroke();
+    text(message, x + w/2, y + w/2);
+    fill(0, 102, 153);
+    textAlign(CENTER, CENTER);
+    
+    // color as per the cell type
+    if(this.type == 'terminal')
+    {
+      noStroke();
+      text('t', x + w - w/10, y + w - w/10);
+      fill(0, 102, 153);
+      textAlign(CENTER, CENTER);
+      
+    }
+    else if(this.type == 'wall')
+    {
+      noStroke();
+      fill(151, 151, 151);
+      rect(x, y, w, w);
+      // this.value = '';
+    }
+    else{
+      // now color the environment
+      noStroke();
+      fill(this.color);
+      rect(x, y, w, w);
+
+    }
+
+    // if we have to show policy
+    if (show_policy == true && this.type != 'terminal' && this.type != 'wall'){
+      
+      // get the best neighbor and point to that
+      var neighbors = this.get_neighbors_action_index();
+      var max_score = -Infinity;
+      var direction = 'na';
+      for (ii = 0; ii < neighbors.length; ii ++){
+        var next_grid = grid[neighbors[ii][1]];
+        if ((next_grid.value + int(next_grid.reward)) > max_score){
+          max_score = next_grid.value + int(next_grid.reward) ;
+          direction = neighbors[ii][0];
+        }
+      }
+
+      var angle = 0;
+      if (direction == 'top') angle = 270;
+      if (direction == 'right') angle = 0;
+      if (direction == 'bottom') angle = 90;
+      if (direction == 'left') angle = 180;
+
+      // if state is blocked, hide policy arrow
+      if (direction != 'na') this.arrow.update(angle);
+      else this.arrow.update(angle, 0)
+    }  
+
+  }
+
+
+}
