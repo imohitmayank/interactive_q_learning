@@ -15,20 +15,21 @@ var max_reward = 0, min_reward = 0;
 var color_gradient;
 var compute = false;
 var show_policy = false;
+var framerate = 5;
 
 // widgets
 var reward_input;
 var state_type_sel;
 var discount_input;
-var randomness_input;
+var deterministic_prob_input;
 var e_greedy_input;
 var show_hide_policy;
 
 // Q-learning 
 var discount = 0.9;
 var learning_rate = 1;
-var episodes = 10;
-var turns_limit = 100;
+var episodes = 1;
+var turns_limit = 1;
 var deterministic_prob = 1;
 var e_greedy = 1;
 
@@ -37,13 +38,13 @@ var e_greedy = 1;
 function setup() 
 {  
   createCanvas(600, 600);
-  
+  w = 120;
   tableWidth = width * 1;
   tableHeight = height * 0.60;
   cols = floor(tableWidth/w);
   rows = floor(tableHeight/w);
   
-  frameRate(5);
+  frameRate(framerate);
 
   // set angle mode
   angleMode(DEGREES);
@@ -122,9 +123,9 @@ function create_setting_menu_widgets(){
   discount_input.size(50);
  
   // Change randomness
-  randomness_input = createInput('1');
-  randomness_input.position(510, tableHeight + 120);
-  randomness_input.size(50);
+  deterministic_prob_input = createInput('1');
+  deterministic_prob_input.position(510, tableHeight + 120);
+  deterministic_prob_input.size(50);
   
   // Change greedyness
   e_greedy_input = createInput('1');
@@ -200,7 +201,7 @@ function create_setting_menu_text(){
   text("Discount: ", 420, tableHeight + 85);
  
   // Deterministic probability
-  text("Randomness: ", 420, tableHeight + 135);
+  text("Deterministic: ", 420, tableHeight + 135);
 
   // E-greedy
   text("E-greedy: ", 420, tableHeight + 185);
@@ -291,7 +292,7 @@ function grid_size_changed(){
 
 //
 function grid_speed_changed(){
-  var grid_speed_mapping = {'slow' : [1, 1], 'medium': [1, 100], 'fast' : [100, 100]}
+  var grid_speed_mapping = {'slow' : [1, 1], 'medium': [1, 10], 'fast' : [1, 100]}
   var new_value = grid_speed_sel.value();
   new_value = grid_speed_mapping[new_value];
 
@@ -323,7 +324,7 @@ function toggle_compute(){
 
   // reset the agent level settings
   discount = float(discount_input.value());
-  randomness = float(randomness_input.value());
+  deterministic_prob = float(deterministic_prob_input.value());
   e_greedy = float(e_greedy_input.value());
 }
 
@@ -448,6 +449,9 @@ function perfrom_q_learning(){
     // increment
     turn_count += 1;
 
+    // highlight the current state
+    grid[current_pos].highlight();
+
     // get all possible neighbors
     var valid_neighbors = grid[current_pos].get_neighbors_action_index();
     var possible_actions = ['top', 'right', 'botton', 'left'];
@@ -473,7 +477,6 @@ function perfrom_q_learning(){
 
     // modify the current state's expected value
     grid[current_pos].value = round_float(best_action_value_pair[1], 2);
-          
     // goto next state
     current_pos = next_state_pos;
   }
