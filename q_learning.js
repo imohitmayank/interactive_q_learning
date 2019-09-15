@@ -15,7 +15,15 @@ var max_reward = 0, min_reward = 0;
 var color_gradient;
 var compute = false;
 var show_policy = false;
-var framerate = 5;
+var show_highlight = false;
+var framerate = 3;
+var grid_size_mapping = {'small': 120, 'medium': 85, 'large' : 50}
+var grid_speed_mapping = {'slow' : [1, 1], 'medium': [1, 10], 'fast' : [1, 100]}
+var last_state = -1;
+var episode_over = true;
+
+var over_turns = 0;
+var overall_turn_limit = 5;
 
 // widgets
 var reward_input;
@@ -27,9 +35,9 @@ var show_hide_policy;
 
 // Q-learning 
 var discount = 0.9;
-var learning_rate = 1;
-var episodes = 1;
-var turns_limit = 1;
+// var learning_rate = 1;
+var episodes = grid_speed_mapping['slow'][0];
+var iteration_limit = grid_speed_mapping['slow'][1];
 var deterministic_prob = 1;
 var e_greedy = 1;
 
@@ -51,7 +59,10 @@ function setup()
 
   // reset grid
   grid = [];
+  episode_over = true;
   max_reward = 0, min_reward = 0;
+  iteration_limit = grid_speed_mapping['slow'][1];
+
 
   // refill the grid
   for (var j = 0; j < rows; j++) {
@@ -149,6 +160,11 @@ function create_setting_menu_widgets(){
   show_hide_policy = createButton('Show/Hide Policy');
   show_hide_policy.position(250, tableHeight + 220);
   show_hide_policy.mousePressed(show_hide_policy_toggle);
+
+  // button to show highlight
+  show_highlight_button = createButton('Show/Hide Highlight');
+  show_highlight_button.position(430, tableHeight + 220);
+  show_highlight_button.mousePressed(show_highlight_toggle);
   ////////////////////////
 
 }
@@ -264,8 +280,7 @@ function draw() {
 //////////////////////
 
 // modify the gridworld cell size and reset environment
-function grid_size_changed(){
-  var grid_size_mapping = {'small': 120, 'medium': 85, 'large' : 50}
+function grid_size_changed(){  
   var new_value = grid_size_sel.value();
   new_value = grid_size_mapping[new_value];
 
@@ -292,13 +307,12 @@ function grid_size_changed(){
 
 //
 function grid_speed_changed(){
-  var grid_speed_mapping = {'slow' : [1, 1], 'medium': [1, 10], 'fast' : [1, 100]}
   var new_value = grid_speed_sel.value();
   new_value = grid_speed_mapping[new_value];
 
   // modify the parameters factoring speed
   episodes = new_value[0];
-  turns_limit = new_value[1];
+  iteration_limit = new_value[1];
 }
 
 // show and hide policy arrows
@@ -307,6 +321,13 @@ function show_hide_policy_toggle(){
   // show policy
   if (show_policy) show_policy = false;
   else show_policy = true;
+}
+
+// show ro hide highlight
+function show_highlight_toggle(){
+  // show highlight
+  if (show_highlight) show_highlight = false;
+  else show_highlight = true;
 }
 
 // reset the environment
@@ -398,7 +419,13 @@ function find_max(obj){
 }
 
 function find_index_of_max_value(arr){
-  return arr.indexOf(Math.max(...arr));
+  // find max value
+  var max_value = max(arr);
+  var max_indices = [];
+  for (x = 0; x < arr.length; x++){
+    if (arr[x] == max_value) max_indices.push(x);
+  }
+  return sample_random(max_indices);
 }
 
 function find_key_with_max(obj){
@@ -429,8 +456,29 @@ function get_random_state(){
   return sample_random(available_states);
 }
 
+// get unvisted state by some probability
+// function get_e_greedy_state(){
+//   // variable to hold available states
+//   var visited_states = [];
+//   var not_visited_states = [];
+//   // find state which are of type normal and visited or not visited
+//   for (i = 0; i < grid.length; i++){
+//     if (grid[i].type == 'normal'){
+//       if (grid[i].value == 0) visited_states.push(i);
+//       else not_visited_states.push(i);
+//     } 
+//   }
+//   // corner case for start
+//   if (visited_states.length == 0) visited_states = not_visited_states;
+//   if (not_visited_states.length == 0) not_visited_states = visited_states;
+//   // based on e-greedy select the state
+//   if (Math.random() <= (1 - e_greedy)) return sample_random(visited_states);
+//   else return sample_random(not_visited_states);
+// }
+
 // return true if game is over
 function is_episode_over(current_pos){
+
   if (grid[current_pos].type == 'terminal') return true;
   else return false;
 }
@@ -439,36 +487,45 @@ function is_episode_over(current_pos){
 function perfrom_q_learning(){
 
   // get the starting place
-  current_pos = get_random_state();
-  // turn counter
-  turn_count = 0
+  // current_pos = get_random_state();
+  if (episode_over == false) current_pos = last_state;
+  else {
+    current_pos = get_random_state();
+    episode_over = false;
+  }
+
+  var iteration_count = 0;
 
   // while epsiode doesn't terminates
-  while (!is_episode_over(current_pos) && (turn_count < turns_limit))
+  while (!is_episode_over(current_pos) && (iteration_count < iteration_limit))
   {
     // increment
-    turn_count += 1;
+    iteration_count += 1;
+    over_turns += 1;
 
     // highlight the current state
-    grid[current_pos].highlight();
+    if (show_highlight == true) grid[current_pos].highlight();
 
     // get all possible neighbors
     var valid_neighbors = grid[current_pos].get_neighbors_action_index();
-    var possible_actions = ['top', 'right', 'botton', 'left'];
+    var possible_actions = ['top', 'right', 'bottom', 'left'];
 
     // select one action by e-greedy
     // var action = sample_random(valid_neighbors);
     var best_action_value_pair = grid[current_pos].get_next_best_action_value();
-    var best_action_index = possible_actions.indexOf(best_action_value_pair[0]);
-    var spliced_actions = possible_actions;
-    spliced_actions.splice(best_action_index, 1);
+    // var best_action_index = possible_actions.indexOf(best_action_value_pair[0]);
+    // var spliced_actions = [];
+    // for (x = 0; x < possible_actions.length; x ++){
+    //   if (possible_actions[x] != best_action_value_pair[0]) spliced_actions.push(possible_actions[x]);
+    // }
 
     var selected_action;
     if (Math.random() <= (1 - e_greedy)) selected_action = best_action_value_pair[0];
-    else selected_action = sample_random(spliced_actions);
+    else selected_action = sample_random(possible_actions);
 
     // find the next state
     var next_state_pos = grid[current_pos].get_next_state_pos(selected_action);
+    // console.log(current_pos, best_action_value_pair[0], selected_action, next_state_pos);
 
     // if no action present, go to random state and skip learning for this state
     if (valid_neighbors.length == 0) {
@@ -479,7 +536,14 @@ function perfrom_q_learning(){
     grid[current_pos].value = round_float(best_action_value_pair[1], 2);
     // goto next state
     current_pos = next_state_pos;
+    last_state = next_state_pos;
   }
+
+  if (is_episode_over(current_pos) || (overall_turn_limit == over_turns)) {
+    episode_over = true;
+    over_turns = 0;
+  }
+
 }
 
 
@@ -566,16 +630,17 @@ function Cell(i, j) {
     var other_states_prob = (1 - deterministic_prob) / 3;
 
     //find the max future reward for each action and possible states
-    for (x = 0; x < possible_actions.length; x++){
+    for (var x = 0; x < possible_actions.length; x++){
       var action_reward = this.action_rewards[possible_actions[x]];
       var summed_action_state_reward = 0;
-      for (y = 0; y < possible_actions.length; y++){
+      for (var y = 0; y < possible_actions.length; y++){
           if (x != y){
             summed_action_state_reward += other_states_prob * grid[this.get_next_state_pos(possible_actions[y], 1)].value;
           }
           else{
             summed_action_state_reward += deterministic_prob * grid[this.get_next_state_pos(possible_actions[y], 1)].value;
           }
+
       }
       // apply discount
       summed_action_state_reward = action_reward + discount * summed_action_state_reward
@@ -591,24 +656,28 @@ function Cell(i, j) {
   }
 
   // Get the index of next state, given current state and applied action
-  this.get_next_state_pos = function(action, deterministic_prob = 'null'){
+  this.get_next_state_pos = function(action, loc_deterministic_prob = 'null'){
     
-    if (deterministic_prob == 'null') deterministic_prob = deterministic_prob;
+    if (loc_deterministic_prob == 'null') loc_deterministic_prob = deterministic_prob;
     var next_state_pos = -1;
+    var possible_actions = ['top', 'right', 'left', 'bottom'];
+    var sliced_actions = [];
     var action_pos_mapping = {'top': get_index(i, j -1), 'right': get_index(i+1, j), 'bottom' : get_index(i, j+1), 'left': get_index(i-1, j)};
-    var action_pos_mapping_without_applied_action = {};
-    for (ii = 0; ii < Object.keys(action_pos_mapping).length; ii++){
-      var action_at_index = Object.keys(action_pos_mapping)[ii];
-      if (action_at_index != action) action_pos_mapping_without_applied_action[action_at_index] = action_pos_mapping[action_at_index];
+    // var action_pos_mapping_without_applied_action = {};
+    for (var x = 0; x < possible_actions.length; x++){
+      if (possible_actions[x] != action) {
+        sliced_actions.push(possible_actions[x]);
+      }
     }
 
     // suggest next state w.r.t. nondeterministic probability
     var random_number = Math.random();
-    if (random_number <= deterministic_prob) next_state_pos = action_pos_mapping[action];
-    else next_state_pos = sample_random(Object.values(action_pos_mapping_without_applied_action))
+    if (random_number <= loc_deterministic_prob) next_state_pos = action_pos_mapping[action];
+    else next_state_pos = action_pos_mapping[sample_random(sliced_actions)];
 
     // if next state is not possible (out of grid or wall), return current state
     if (next_state_pos == -1)  next_state_pos = get_index(i, j);  
+    // if (typeof(next_state_pos) == "undefined") debugger;
     if (grid[next_state_pos].type == 'wall') next_state_pos = get_index(i, j);  
         
     // return
@@ -689,7 +758,7 @@ function Cell(i, j) {
       var neighbors = this.get_all_neighbors_action_index();
       var max_score = -Infinity;
       var direction = 'na';
-      for (ii = 0; ii < neighbors.length; ii ++){
+      for (var ii = 0; ii < neighbors.length; ii ++){
         var next_grid = grid[neighbors[ii][1]];
         if ((next_grid.value + int(next_grid.reward)) > max_score){
           max_score = next_grid.value + int(next_grid.reward) ;
