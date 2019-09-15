@@ -89,7 +89,7 @@ function create_setting_menu_widgets(){
   ////////////////////////
   // selection to modify grid size
   grid_size_sel = createSelect();
-  grid_size_sel.position(90, tableHeight + 70);
+  grid_size_sel.position(80, tableHeight + 70);
   grid_size_sel.option('small');
   grid_size_sel.option('medium');
   grid_size_sel.option('large');
@@ -191,7 +191,7 @@ function create_setting_menu_text(){
   text("Gridworld level,", 10, tableHeight + 50);
 
   // Grid size
-  text("Grid size:", 20, tableHeight + 85);
+  text("Size:", 20, tableHeight + 85);
 
   // 
   text("Speed:", 20, tableHeight + 135);
@@ -294,6 +294,7 @@ function grid_size_changed(){
     rows = floor(tableHeight/w);
     grid = [];
     max_reward = 0, min_reward = 0;
+    episode_over = true;
 
     // refill the grid
     for (var j = 0; j < rows; j++) {
