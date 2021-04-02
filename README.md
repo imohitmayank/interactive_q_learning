@@ -3,4 +3,4 @@ An interactive Q table for intuitive understanding of the Q learning
 
 ### Blog
 
-Know more about the project @ [here](https://mohitmayank.com/interactive-q-learning/).
+Know more about the project @ [here](https://mohitmayank.com/blog/interactive-q-learning).
